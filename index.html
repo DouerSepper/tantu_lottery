@@ -169,9 +169,11 @@
     .workspace {
       display: grid;
       grid-template-columns: minmax(0,1.414fr) minmax(0,1fr);
+      grid-template-rows: minmax(0,1fr);
       gap: 20px;
       align-items: stretch;
-      min-height: calc(100vh - 95px);
+      height: max(420px, calc(100vh - 95px));
+      min-height: max(420px, calc(100vh - 95px));
     }
 
     .panel {
@@ -182,6 +184,7 @@
     }
 
     .wheel-panel {
+      height: 100%;
       min-height: calc(100vh - 95px);
       padding: 24px;
       display: flex;
@@ -333,6 +336,11 @@
       flex-direction: column;
       gap: 16px;
       min-width: 0;
+      min-height: 0;
+    }
+
+    .side-column > .panel:not(.history-panel) {
+      flex: 0 0 auto;
     }
 
     .controls-panel {
@@ -557,11 +565,16 @@
     }
 
     .history-panel {
+      display: flex;
+      flex: 0 1 auto;
+      flex-direction: column;
+      min-height: 0;
       padding: 18px 21px;
     }
 
     .history-head {
       display: flex;
+      flex: 0 0 auto;
       justify-content: space-between;
       align-items: center;
       gap: 10px;
@@ -582,10 +595,11 @@
 
     .history-list {
       display: flex;
+      flex: 0 1 auto;
       flex-direction: column;
       gap: 7px;
-      max-height: 160px;
-      overflow: auto;
+      min-height: 0;
+      overflow-y: auto;
     }
 
     .history-row {
@@ -846,7 +860,13 @@
     @media (max-width:900px) {
       .workspace {
         grid-template-columns: minmax(0,1fr);
+        grid-template-rows: auto;
+        height: auto;
         min-height: 0;
+      }
+
+      .wheel-panel {
+        height: auto;
       }
 
       .side-column {
@@ -1834,6 +1854,13 @@
       });
       document.addEventListener("keydown", event => {
         if (winnerReveal.hidden) return;
+        if (event.code === "Space") {
+          const target = event.target instanceof Element ? event.target : null;
+          if (target?.closest("button, a, input, textarea, select, [role='button'], [contenteditable='true']")) return;
+          event.preventDefault();
+          closeWinnerReveal();
+          return;
+        }
         if (event.key === "Escape") {
           closeWinnerReveal();
           return;
