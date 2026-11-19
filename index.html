@@ -33,8 +33,7 @@
       --type-heading: 18px;
       --type-wheel: 36px;
       --type-wheel-brand: 24px;
-      --type-wheel-long: 24px;
-      --type-wheel-longest: 20px;
+      --type-wheel-name: 24px;
       --type-wheel-segment: 20px;
       --type-spin-button: 20px;
       --type-result: 36px;
@@ -289,12 +288,8 @@
       white-space: nowrap;
     }
 
-    .wheel-center.is-long-name strong {
-      font-size: var(--type-wheel-long);
-    }
-
-    .wheel-center.is-very-long-name strong {
-      font-size: var(--type-wheel-longest);
+    .wheel-center.is-name strong {
+      font-size: var(--type-wheel-name);
     }
 
     .spin-action {
@@ -1084,7 +1079,6 @@
     const CANVAS_FONT_FAMILY = rootComputedStyle.getPropertyValue("--font-family").trim() || "sans-serif";
     const MINIMUM_ALLOWED_SPIN_DURATION_SECONDS = 3;
     const MAXIMUM_ALLOWED_SPIN_DURATION_SECONDS = 60;
-    const MAX_VISIBLE_HISTORY_ITEMS = 20;
     const MAX_CHARGE_DURATION_MS = 2000;
     const CELEBRATION_REVEAL_DELAY_MS = 1000;
     const MINIMUM_SPIN_TURNS = 4;
@@ -1099,6 +1093,7 @@
     let removeAfterDraw = false;
     let drawnIds = new Set();
     let history = [];
+    let renderedHistoryCount = 0;
     let currentRotation = 0;
     // 保留当前画布上实际显示的扇区顺序；停止后不重排，确保指针对应的姓名不变。
     let wheelPoolSnapshot = [];
@@ -1188,9 +1183,7 @@
       wheelCenterMode = mode;
       wheelCenterPersonId = personId;
       center.classList.toggle("is-brand", !person);
-      const nameLength = person ? Array.from(person.name).length : 0;
-      center.classList.toggle("is-long-name", nameLength > 4);
-      center.classList.toggle("is-very-long-name", nameLength > 9);
+      center.classList.toggle("is-name", Boolean(person));
       if (!person) {
         name.textContent = "GOOD LUCK";
         return;
@@ -1490,18 +1483,29 @@
 
     function renderHistory() {
       const list = getElement("historyList");
-      const fragment = document.createDocumentFragment();
-      if (!history.length) {
-        const emptyNote = document.createElement("div");
-        emptyNote.className = "history-empty";
-        emptyNote.textContent = "还没有中奖记录";
-        fragment.append(emptyNote);
-        list.replaceChildren(fragment);
-        return;
+
+      if (renderedHistoryCount > history.length) {
+        list.replaceChildren();
+        renderedHistoryCount = 0;
       }
 
-      const firstVisibleIndex = Math.max(0, history.length - MAX_VISIBLE_HISTORY_ITEMS);
-      for (let index = history.length - 1; index >= firstVisibleIndex; index -= 1) {
+      if (!history.length) {
+        if (!list.firstElementChild?.classList.contains("history-empty")) {
+          const emptyNote = document.createElement("div");
+          emptyNote.className = "history-empty";
+          emptyNote.textContent = "还没有中奖记录";
+          list.replaceChildren(emptyNote);
+        }
+        return;
+      }
+      if (renderedHistoryCount === history.length) return;
+
+      if (renderedHistoryCount === 0 && list.firstElementChild?.classList.contains("history-empty")) {
+        list.replaceChildren();
+      }
+
+      const fragment = document.createDocumentFragment();
+      for (let index = history.length - 1; index >= renderedHistoryCount; index -= 1) {
         const item = history[index];
         const displayNumber = index + 1;
         const row = document.createElement("div");
@@ -1523,7 +1527,8 @@
         row.append(badge, main, time);
         fragment.append(row);
       }
-      list.replaceChildren(fragment);
+      list.prepend(fragment);
+      renderedHistoryCount = history.length;
     }
 
     function renderApplication() {
