@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0F4C81">
+  <title>坦途抽奖大转盘</title>
+  <style>
+    :root {
+      --color-primary: #0F4C81;
+      --color-primary-dark: #0A3B65;
+      --color-charge-end: #E2492F;
+      --color-text: #18354D;
+      --color-muted: #63788A;
+      --color-page: #F4F7FA;
+      --color-surface: #FFFFFF;
+      --color-border: #DCE5EC;
+      --color-soft: #EAF1F7;
+      --color-soft-hover: #DFEAF3;
+      --color-disabled: #A5B2BE;
+      --color-focus: rgba(15,76,129,.16);
+      --color-overlay: rgba(13,38,59,.84);
+      --shadow-card: 0 8px 24px rgba(15,76,129,.08);
+      --shadow-overlay: 0 16px 40px rgba(13,38,59,.18);
+      --color-wheel-separator: rgba(255,255,255,.95);
+      --color-wheel-1: #C8DDEC;
+      --color-wheel-2: #E5EEF4;
+      --color-wheel-3: #B9D2E3;
+      --color-wheel-4: #F2E5DF;
+      --radius: 18px;
+      /* 全站字号仅使用偶数像素；扇区文字也按偶数档位切换。 */
+      --type-min: 16px;
+      --type-heading: 18px;
+      --type-wheel: 36px;
+      --type-wheel-brand: 24px;
+      --type-wheel-long: 24px;
+      --type-wheel-longest: 20px;
+      --type-wheel-segment: 20px;
+      --type-spin-button: 20px;
+      --type-result: 36px;
+      --type-display: 72px;
+      /* Windows uses Microsoft YaHei UI; system-ui resolves to SF Pro on macOS,
+         while the explicit PingFang face is the CJK fallback there. */
+      --font-family: "Microsoft YaHei UI", system-ui, "PingFang SC", sans-serif;
+      --type-weight: 400;
+      --confetti-duration: 4s;
+      --confetti-stagger: 800ms;
+    }
+    * { box-sizing: border-box; font-weight:var(--type-weight); }
+    html { min-width: 320px; background: var(--color-page); scrollbar-gutter: stable; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--color-text);
+      font-size: var(--type-heading);
+      font-family: var(--font-family);
+      font-weight: var(--type-weight);
+      background: var(--color-page);
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; }
+    .page { width:auto; max-width:none; margin:0 clamp(20px, calc(7.843vw - 50.6px), 100px); padding:20px 0; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:38px; margin-bottom:20px; padding:0; }
+    .brand { display:flex; align-items:center; gap:11px; letter-spacing:.04em; }
+    .brand-mark { width:35px; height:35px; padding:0; border:0; border-radius:10px; display:grid; place-items:center; color:var(--color-surface); background:var(--color-primary); }
+    .brand-mark:focus-visible { outline:3px solid var(--color-primary); outline-offset:3px; }
+    .brand-mark svg { width:19px; height:19px; }
+    .brand span:last-child { font-size:var(--type-heading); }
+    .top-actions { display:flex; align-items:center; gap:9px; flex-wrap:wrap; justify-content:flex-end; }
+    .import-config-btn { visibility:hidden; }
+    .import-config-btn.is-visible { visibility:visible; }
+    .utility-btn { border:1px solid var(--color-border); background:var(--color-surface); color:var(--color-muted); padding:9px 13px; border-radius:10px; font-size:var(--type-min); transition:background .18s,border-color .18s; }
+    .utility-btn:hover:not(:disabled) { border-color:var(--color-primary); color:var(--color-primary); background:var(--color-surface); }
+    .utility-btn:disabled { opacity:.5; }
+    .workspace { display:grid; grid-template-columns:minmax(0,1.414fr) minmax(0,1fr); gap:20px; align-items:stretch; min-height:calc(100vh - 95px); }
+    .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow-card); }
+    .wheel-panel { min-height:calc(100vh - 95px); padding:24px; display:flex; flex-direction:column; justify-content:center; min-width:0; }
+    .section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; }
+    .section-title { font-size:var(--type-heading); }
+    .wheel-stage { width:min(100%, 1100px, max(280px, calc(100vh - 260px))); aspect-ratio:1; margin:0 auto 10px; position:relative; display:grid; place-items:center; }
+    .wheel-frame { position:absolute; z-index:1; inset:2.5%; overflow:hidden; border-radius:50%; background:var(--color-surface); box-shadow:var(--shadow-card); padding:9px; }
+    .wheel-canvas { position:relative; display:block; width:100%; height:100%; border-radius:50%; transform:rotate(0deg); will-change:transform; }
+    .pointer { position:absolute; z-index:4; top:50%; right:-1%; transform:translateY(-50%); width:38px; height:44px; background:var(--color-primary); clip-path:polygon(0 50%,100% 0,100% 100%); opacity:0; visibility:hidden; pointer-events:none; transition:opacity .2s; }
+    .pointer.visible { opacity:1; visibility:visible; }
+    .wheel-center { position:absolute; z-index:3; width:32%; aspect-ratio:1; border-radius:50%; display:flex; justify-content:center; align-items:center; background:var(--color-primary-dark); border:4px solid var(--color-surface); color:var(--color-surface); pointer-events:none; }
+    .wheel-center strong { display:flex; width:100%; height:100%; justify-content:center; align-items:center; font-size:var(--type-wheel); line-height:1; letter-spacing:0; text-align:center; overflow-wrap:anywhere; }
+    .wheel-center.is-brand strong { font-size:var(--type-wheel-brand); letter-spacing:0; white-space:nowrap; }
+    .wheel-center.is-long-name strong { font-size:var(--type-wheel-long); }
+    .wheel-center.is-very-long-name strong { font-size:var(--type-wheel-longest); }
+    .spin-action { --charge-progress:0%; --charge-color:var(--color-primary); width:min(280px,100%); margin:10px auto 0; touch-action:none; user-select:none; -webkit-user-select:none; border:0; border-radius:11px; padding:15px 22px; color:var(--color-surface); font-size:var(--type-spin-button); letter-spacing:.02em; background:var(--color-primary); transition:opacity .18s; }
+    .spin-action.charging {
+      --charge-color: color-mix(in srgb,var(--color-primary) calc(100% - var(--charge-progress)),var(--color-charge-end) var(--charge-progress));
+      --charge-color: color-mix(in oklch,var(--color-primary) calc(100% - var(--charge-progress)),var(--color-charge-end) var(--charge-progress));
+      background:linear-gradient(90deg,var(--charge-color) 0%,var(--charge-color) var(--charge-progress),var(--color-primary-dark) var(--charge-progress),var(--color-primary-dark) 100%);
+    }
+    .spin-action.charge-full { background:var(--color-charge-end); animation:charge-limit-shake .12s ease-in-out infinite; }
+    .spin-action:disabled { cursor:not-allowed; opacity:.45; }
+    .side-column { display:flex; flex-direction:column; gap:16px; min-width:0; }
+    .controls-panel { padding:22px; }
+    .option-line { display:flex; align-items:center; gap:9px; margin-top:16px; color:var(--color-muted); font-size:var(--type-min); cursor:pointer; user-select:none; }
+    .option-line input { accent-color:var(--color-primary); width:15px; height:15px; margin:0; }
+    .pool-summary { display:flex; justify-content:space-between; align-items:center; gap:10px; border-top:1px solid var(--color-border); margin-top:18px; padding-top:15px; font-size:var(--type-min); color:var(--color-muted); }
+    .pool-summary strong { color:var(--color-text); font-size:var(--type-min); }
+    .names-panel { padding:19px 21px; }
+    .names-head { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:13px; }
+    .names-head strong { font-size:var(--type-heading); }
+    .names-head span { font-size:var(--type-min); color:var(--color-muted); }
+    .name-cloud { display:flex; flex-wrap:wrap; gap:8px; max-height:none; overflow:visible; padding:10px 10px 8px 2px; }
+    .name-chip { position:relative; display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:6px 10px; background:var(--color-soft); border:1px solid var(--color-border); border-radius:9px; font-size:var(--type-min); color:var(--color-muted); white-space:nowrap; transition:background .16s,border-color .16s; }
+    .name-chip:hover { background:var(--color-surface); border-color:var(--color-primary); }
+    .name-chip.done { color:var(--color-disabled); background:var(--color-soft); text-decoration:line-through; }
+    .name-chip .tag-dot { flex:0 0 5px; width:5px; height:5px; border-radius:50%; background:var(--color-primary); }
+    .name-chip .remove-person { position:absolute; top:-7px; right:-7px; display:grid; place-items:center; width:18px; height:18px; padding:0; border:2px solid var(--color-surface); border-radius:50%; background:var(--color-charge-end); color:var(--color-surface); font-size:var(--type-min); line-height:1; opacity:0; transform:scale(.78); transition:opacity .14s,transform .14s; }
+    .name-chip .remove-person-mark { display:block; transform:translateY(-1px); }
+    .name-chip:hover .remove-person, .name-chip:focus-within .remove-person { opacity:1; transform:scale(1); }
+    .empty-note { color:var(--color-muted); font-size:var(--type-min); padding:12px 0; }
+    .add-person-form { display:flex; gap:8px; margin-top:13px; padding-top:12px; border-top:1px solid var(--color-border); }
+    .add-person-input { flex:1; min-width:0; height:37px; padding:0 11px; border:1px solid var(--color-border); border-radius:9px; outline:none; background:var(--color-surface); color:var(--color-text); font-size:var(--type-min); transition:border-color .16s,box-shadow .16s; }
+    .add-person-input:focus { border-color:var(--color-primary); box-shadow:0 0 0 3px var(--color-focus); background:var(--color-surface); }
+    .add-person-input::placeholder { color:var(--color-disabled); }
+    .add-person-btn { flex:0 0 auto; height:37px; padding:0 13px; border:0; border-radius:9px; background:var(--color-primary); color:var(--color-surface); font-size:var(--type-min); }
+    .add-person-btn:hover { background:var(--color-primary-dark); }
+    .add-person-btn:disabled, .add-person-input:disabled { opacity:.5; cursor:not-allowed; }
+    .result-panel { display:flex; flex-direction:column; padding:20px 22px; min-height:150px; }
+    .result-kicker { color:var(--color-primary); font-size:var(--type-heading); letter-spacing:.1em; }
+    .winner-name { display:flex; flex:1; align-items:center; min-height:2.2em; margin-top:4px; font-size:var(--type-result); line-height:1.12; color:var(--color-primary-dark); overflow-wrap:anywhere; }
+    .winner-placeholder { color:var(--color-muted); }
+    .history-panel { padding:18px 21px; }
+    .history-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:11px; }
+    .history-head strong { font-size:var(--type-heading); }
+    .text-button { border:0; background:transparent; color:var(--color-primary); font-size:var(--type-min); padding:4px; }
+    .history-list { display:flex; flex-direction:column; gap:7px; max-height:160px; overflow:auto; }
+    .history-row { display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:9px; border-bottom:1px solid var(--color-border); padding:5px 0 8px; }
+    .history-index { width:27px; height:27px; display:grid; place-items:center; border-radius:8px; background:var(--color-soft); color:var(--color-primary); font-size:var(--type-min); }
+    .history-name { font-size:var(--type-min); }
+    .history-detail { display:block; margin-top:3px; color:var(--color-muted); font-size:var(--type-min); }
+    .history-time { color:var(--color-muted); font-size:var(--type-min); }
+    .history-empty { font-size:var(--type-min); color:var(--color-muted); padding:9px 0 4px; }
+    .toast { position:fixed; left:50%; bottom:24px; transform:translate(-50%,15px); opacity:0; pointer-events:none; z-index:20; background:var(--color-primary-dark); color:var(--color-surface); padding:11px 16px; border-radius:10px; font-size:var(--type-min); box-shadow:var(--shadow-card); transition:.25s ease; max-width:calc(100% - 32px); text-align:center; }
+    .toast.show { opacity:1; transform:translate(-50%,0); }
+    body.has-winner-reveal { overflow:hidden; }
+    .winner-reveal { position:fixed; inset:0; z-index:30; display:grid; place-items:center; padding:22px; background:var(--color-overlay); animation:reveal-fade-in .22s ease-out both; }
+    .winner-reveal[hidden] { display:none; }
+    .winner-reveal-card { width:min(760px,100%); min-height:min(420px,calc(100vh - 44px)); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:clamp(24px,5vh,52px) clamp(24px,7vw,72px); border:1px solid var(--color-border); border-radius:24px; text-align:center; background:var(--color-surface); box-shadow:var(--shadow-overlay); animation:reveal-card-in .35s ease-out both; }
+    .winner-reveal-kicker { color:var(--color-primary); font-size:var(--type-heading); letter-spacing:.12em; }
+    .winner-reveal-name { max-width:100%; margin:20px 0 12px; color:var(--color-primary-dark); font-size:var(--type-display); line-height:1.06; overflow-wrap:anywhere; animation:winner-name-pop .45s ease-out .08s both; }
+    .winner-reveal-name:focus { outline:none; }
+    .winner-reveal-name:after { content:""; display:block; width:min(48vw,240px); height:2px; margin:16px auto 0; border-radius:999px; background:var(--color-charge-end); }
+    .winner-reveal-meta { margin:0; color:var(--color-muted); font-size:var(--type-min); }
+    .winner-reveal-action { margin-top:28px; padding:12px 24px; border:0; border-radius:10px; color:var(--color-surface); background:var(--color-primary); font-size:var(--type-heading); transition:background .18s; }
+    .winner-reveal-action:hover { background:var(--color-primary-dark); }
+    .winner-reveal-action:focus-visible { outline:3px solid var(--color-primary); outline-offset:4px; }
+    .confetti { position:fixed; z-index:31; top:-12px; width:8px; height:13px; border-radius:2px; pointer-events:none; animation:confetti-fall var(--confetti-duration) ease-in forwards; }
+    @keyframes reveal-fade-in { from { opacity:0; } to { opacity:1; } }
+    @keyframes reveal-card-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes winner-name-pop { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes charge-limit-shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-3px); } 75% { transform:translateX(3px); } }
+    @keyframes confetti-fall { to { transform:translate3d(var(--drift),105vh,0) rotate(720deg); opacity:0; } }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    @media (prefers-reduced-motion: reduce) {
+      .winner-reveal, .winner-reveal-card, .winner-reveal-name, .confetti, .spin-action.charge-full { animation-duration:.01ms !important; animation-iteration-count:1 !important; }
+    }
+    @media (max-height:820px) {
+      :root { --type-wheel-brand:18px; }
+    }
+    @media (max-width:1200px) {
+      :root { --type-wheel-brand:18px; --type-wheel:32px; }
+    }
+    @media (max-width:900px) {
+      .workspace { grid-template-columns:minmax(0,1fr); min-height:0; }
+      .side-column { display:grid; grid-template-columns:1fr 1fr; align-items:start; }
+      .controls-panel { grid-column:1 / -1; }
+      .names-panel { grid-column:1 / -1; }
+    }
+    @media (max-width:560px) {
+      :root { --type-wheel-brand:16px; --type-wheel:28px; --type-display:56px; }
+      .topbar { align-items:flex-start; min-height:35px; margin-bottom:16px; }
+      .brand span:last-child { font-size:var(--type-min); }
+      .top-actions { gap:6px; }
+      .utility-btn { padding:7px 9px; }
+      .wheel-panel { min-height:calc(100vh - 91px); padding:17px 12px 18px; }
+      .wheel-stage { width:min(100%, max(240px, calc(100vh - 300px))); margin-top:0; }
+      .wheel-frame { padding:6px; }
+      .pointer { width:30px; height:36px; right:-1.5%; }
+      .controls-panel { padding:17px; }
+      .side-column { display:flex; }
+      .winner-reveal { padding:14px; }
+      .winner-reveal-card { min-height:min(440px,calc(100vh - 28px)); padding:clamp(20px,6vh,44px) 22px; }
+      .name-chip .remove-person { opacity:1; transform:scale(1); }
+      .add-person-form { gap:6px; }
+      .add-person-btn { padding:0 11px; }
+    }
+    @media (max-width:360px) {
+      :root { --type-wheel:24px; --type-display:48px; }
+      .wheel-center { width:40%; }
+    }
+    @media (max-height:560px) {
+      :root { --type-wheel-brand:16px; --type-wheel:24px; }
+      .wheel-center { width:40%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand">
+        <button class="brand-mark" id="settingsToggleBtn" type="button" aria-label="显示抽奖设置" aria-controls="lotterySettings" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v4m0 10v4M3 12h4m10 0h4M8.4 8.4l2.1 2.1m3 3 2.1 2.1m0-7.2-2.1 2.1m-3 3-2.1 2.1"/><circle cx="12" cy="12" r="2.1"/></svg>
+        </button>
+        <span>坦途·抽奖大转盘</span>
+      </div>
+      <div class="top-actions">
+        <button class="utility-btn import-config-btn" id="importLotteryBtn" type="button" aria-hidden="true">导入配置</button>
+        <input type="file" id="lotteryFile" accept=".json,application/json" hidden>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel wheel-panel" aria-label="抽奖转盘">
+        <div class="wheel-stage">
+          <div class="wheel-frame">
+            <canvas class="wheel-canvas" id="wheelCanvas" aria-label="抽奖人员转盘"></canvas>
+          </div>
+          <div class="pointer" id="wheelPointer" aria-hidden="true"></div>
+          <div class="wheel-center is-brand" id="wheelCenter" aria-live="off"><strong id="wheelCenterName">GOOD LUCK</strong></div>
+        </div>
+        <button class="spin-action" id="spinBtn" type="button">请先导入配置</button>
+      </section>
+
+      <aside class="side-column">
+        <section class="panel controls-panel" id="lotterySettings" aria-labelledby="settingsTitle" hidden>
+          <div class="section-head">
+            <div>
+              <div class="section-title" id="settingsTitle">抽奖设置</div>
+            </div>
+          </div>
+          <label class="option-line"><input type="checkbox" id="removeAfterDraw" disabled><span>抽中后移出本轮名单（避免重复中奖）</span></label>
+          <div class="pool-summary">
+            <span>剩余可抽人数</span>
+            <strong id="poolCount">0 人</strong>
+            <span id="drawnCount">已抽 0 人</span>
+          </div>
+          <div class="pool-summary" style="margin-top:10px;padding-top:10px">
+            <span>本次参与总人数</span>
+            <strong id="totalCount">0 人</strong>
+          </div>
+        </section>
+
+        <section class="panel result-panel" aria-live="polite">
+          <div class="result-kicker">THE LUCKY ONE</div>
+          <div class="winner-name winner-placeholder" id="winnerName">等待幸运降临...</div>
+        </section>
+
+        <section class="panel names-panel">
+          <div class="names-head"><strong>全体参与人员</strong><span id="namesCount">0 位</span></div>
+          <div class="name-cloud" id="nameCloud"><div class="empty-note">暂无候选人员</div></div>
+          <form class="add-person-form" id="addPersonForm" autocomplete="off">
+            <label class="sr-only" for="newPersonName">新增人员姓名</label>
+            <input class="add-person-input" id="newPersonName" type="text" maxlength="20" placeholder="输入姓名，按 Enter 添加" aria-label="输入姓名，按 Enter 添加">
+            <button class="add-person-btn" id="addPersonBtn" type="submit">＋ 添加</button>
+          </form>
+        </section>
+
+        <section class="panel history-panel">
+          <div class="history-head">
+            <strong>中奖记录</strong>
+            <div>
+              <button class="text-button" id="resetRoundBtn" type="button">重置本轮</button>
+            </div>
+          </div>
+          <div class="history-list" id="historyList"><div class="history-empty">还没有中奖记录</div></div>
+        </section>
+      </aside>
+    </main>
+
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <div class="winner-reveal" id="winnerReveal" role="dialog" aria-modal="true" aria-labelledby="winnerRevealName" hidden>
+    <div class="winner-reveal-card">
+      <div class="winner-reveal-kicker">本轮幸运得主</div>
+      <h2 class="winner-reveal-name" id="winnerRevealName" tabindex="-1" aria-live="assertive" aria-atomic="true"></h2>
+      <p class="winner-reveal-meta" id="winnerRevealMeta">恭喜获得本轮幸运</p>
+      <button class="winner-reveal-action" id="closeWinnerRevealBtn" type="button">关闭并继续</button>
+    </div>
+  </div>
+
+  <script>
+    // 名单和抽奖参数由用户手动导入的合并 JSON 提供；HTML 不内置数据或默认参数。
+    const rootColorTokens = getComputedStyle(document.documentElement);
+    const themeColor = token => rootColorTokens.getPropertyValue(token).trim();
+    const wheelColorTokens = ["--color-wheel-1", "--color-wheel-2", "--color-wheel-3", "--color-wheel-4"].map(themeColor);
+    const WHEEL_LABEL_FONT_SIZE = Number.parseFloat(rootColorTokens.getPropertyValue("--type-wheel-segment")) || 20;
+    const CONFETTI_COUNT = 60;
+    const CONFETTI_DURATION_MS = Number.parseFloat(rootColorTokens.getPropertyValue("--confetti-duration")) * 1000;
+    const CONFETTI_STAGGER_MS = Number.parseFloat(rootColorTokens.getPropertyValue("--confetti-stagger"));
+    const CANVAS_FONT_FAMILY = getComputedStyle(document.documentElement).getPropertyValue("--font-family").trim() || "sans-serif";
+
+    let people = [];
+    let config = null;
+    let appReady = false;
+    let hasPeopleData = false;
+    let removeAfterDraw = false;
+    let drawnIds = new Set();
+    let history = [];
+    let currentRotation = 0;
+    // 保留当前画布上实际显示的扇区顺序；停止后不重排，确保指针对应的姓名不变。
+    let wheelPoolOverride = [];
+    let isSpinning = false;
+    let hasSpinStarted = false;
+    let isCharging = false;
+    let isCelebrating = false;
+    let isImporting = false;
+    let activeSpin = null;
+    let chargeStartedAt = 0;
+    let keyboardChargeCode = null;
+    let chargeFrameId = null;
+    let spinFrameId = null;
+    let suppressSpinClickUntil = 0;
+    let winnerRevealReturnFocus = null;
+    let wheelCenterPersonId = null;
+    let wheelCenterMode = "brand";
+    const MINIMUM_ALLOWED_SPIN_DURATION_SECONDS = 3;
+    const MAXIMUM_ALLOWED_SPIN_DURATION_SECONDS = 60;
+    const MAX_CHARGE_DURATION_MS = 2000;
+    const CELEBRATION_REVEAL_DELAY_MS = 1000;
+    const MINIMUM_SPIN_TURNS = 4;
+    const ADDITIONAL_POWER_TURNS = 8;
+    const SLOWDOWN_CURVE = 3;
+    let toastTimer = null;
+
+    const $ = (id) => document.getElementById(id);
+    const wheelCanvas = $("wheelCanvas");
+    const wheelContext = wheelCanvas.getContext("2d");
+
+    // Randomness and participant state
+    function modulo(value, base) {
+      return ((value % base) + base) % base;
+    }
+
+    function randomIndex(length) {
+      if (length <= 0) throw new Error("候选名单不能为空");
+      const cryptoApi = window.crypto;
+      if (cryptoApi && typeof cryptoApi.getRandomValues === "function" && length <= 0x100000000) {
+        try {
+          const range = 0x100000000;
+          const limit = range - (range % length);
+          const value = new Uint32Array(1);
+          do { cryptoApi.getRandomValues(value); } while (value[0] >= limit);
+          return value[0] % length;
+        } catch (_) {
+          // Older or restricted browsers can still draw using the fallback below.
+        }
+      }
+      return Math.floor(Math.random() * length);
+    }
+
+    function randomWheelPhase() {
+      return randomIndex(360000) / 1000;
+    }
+
+    function getCurrentPool() {
+      return removeAfterDraw ? people.filter(person => !drawnIds.has(String(person.id))) : people.slice();
+    }
+
+    function getWheelPool() {
+      return wheelPoolOverride.length ? wheelPoolOverride : getCurrentPool();
+    }
+
+    function pointerIndex(pool, rotation = currentRotation) {
+      if (!pool.length) return -1;
+      const segment = 360 / pool.length;
+      const pointerPosition = modulo(90 - modulo(rotation, 360) + segment / 2, 360);
+      return Math.floor(pointerPosition / segment) % pool.length;
+    }
+
+    function updateWheelCenter(pool = getWheelPool()) {
+      const person = hasSpinStarted && pool.length ? pool[pointerIndex(pool)] : null;
+      const mode = person ? isSpinning ? "pointing" : "winner" : "brand";
+      const personId = person ? String(person.id) : null;
+      if (mode === wheelCenterMode && personId === wheelCenterPersonId) return;
+
+      const center = $("wheelCenter");
+      const name = $("wheelCenterName");
+      wheelCenterMode = mode;
+      wheelCenterPersonId = personId;
+      center.classList.toggle("is-brand", !person);
+      const nameLength = person ? Array.from(person.name).length : 0;
+      center.classList.toggle("is-long-name", nameLength > 4);
+      center.classList.toggle("is-very-long-name", nameLength > 9);
+      if (!person) {
+        name.textContent = "GOOD LUCK";
+        return;
+      }
+
+      name.textContent = person.name;
+    }
+
+    function resetWheelIndicator() {
+      hasSpinStarted = false;
+      $("wheelPointer").classList.remove("visible");
+      wheelCenterMode = "";
+      updateWheelCenter();
+    }
+
+    function syncControlStates(poolSize = getCurrentPool().length) {
+      const interactionLocked = isSpinning || isCharging || isCelebrating || isImporting;
+      const canImport = !interactionLocked;
+      const canEditPeople = hasPeopleData && !interactionLocked;
+      $("spinBtn").disabled = isImporting || isSpinning || isCelebrating || (appReady && !isCharging && poolSize === 0);
+      $("spinBtn").textContent = isSpinning
+        ? "转盘转动中…"
+        : isCelebrating
+          ? "准备揭晓…"
+          : isImporting
+            ? "正在导入配置…"
+            : isCharging
+            ? "蓄力中…"
+            : appReady && poolSize === 0 ? "本轮已抽完" : appReady ? "按住空格蓄力抽奖" : "请先导入配置";
+      $("spinBtn").classList.toggle("charging", isCharging);
+      const importButton = $("importLotteryBtn");
+      importButton.classList.toggle("is-visible", appReady);
+      importButton.setAttribute("aria-hidden", String(!appReady));
+      importButton.disabled = !canImport;
+      $("lotteryFile").disabled = !canImport;
+      $("removeAfterDraw").disabled = !appReady || interactionLocked;
+      $("resetRoundBtn").disabled = !appReady || interactionLocked;
+      $("newPersonName").disabled = !canEditPeople;
+      $("addPersonBtn").disabled = !canEditPeople;
+      document.querySelectorAll(".remove-person").forEach(button => {
+        button.disabled = !canEditPeople;
+      });
+    }
+
+    // Import validation and application state
+    function makePersonId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return `custom-${window.crypto.randomUUID()}`;
+      return `custom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    }
+
+    function validatePeople(data) {
+      if (!data || !Array.isArray(data.people)) throw new Error("合并配置需要包含 people 数组");
+      const ids = new Set();
+      const cleaned = data.people.map((person, index) => {
+        if (!person || person.id === undefined || person.id === null || !String(person.name || "").trim()) throw new Error(`第 ${index + 1} 条人员信息缺少 id 或 name`);
+        const id = String(person.id).trim();
+        if (!id) throw new Error(`第 ${index + 1} 条人员信息的 id 不能为空`);
+        if (ids.has(id)) throw new Error(`人员 id 重复：${id}`);
+        ids.add(id);
+        return { id, name: String(person.name).trim() };
+      });
+      return cleaned;
+    }
+
+    function validateConfig(data) {
+      if (!data || !data.spin || typeof data.spin !== "object") {
+        throw new Error("合并配置缺少 spin 抽奖参数");
+      }
+      const spin = data.spin;
+      const minimumDuration = Number(spin.minimumSpinDurationSeconds);
+      const maximumDuration = Number(spin.maximumSpinDurationSeconds);
+      if (!Number.isFinite(minimumDuration) || minimumDuration < MINIMUM_ALLOWED_SPIN_DURATION_SECONDS || minimumDuration > MAXIMUM_ALLOWED_SPIN_DURATION_SECONDS) {
+        throw new Error("minimumSpinDurationSeconds 必须在 3 至 60 秒之间");
+      }
+      if (!Number.isFinite(maximumDuration) || maximumDuration < minimumDuration || maximumDuration > MAXIMUM_ALLOWED_SPIN_DURATION_SECONDS) {
+        throw new Error("maximumSpinDurationSeconds 必须大于或等于最少转动时间，且不超过 60 秒");
+      }
+      if (typeof spin.removeWinnerAfterDraw !== "boolean") {
+        throw new Error("removeWinnerAfterDraw 必须为 true 或 false");
+      }
+      return {
+        version: 1,
+        spin: {
+          minimumSpinDurationSeconds: minimumDuration,
+          maximumSpinDurationSeconds: maximumDuration,
+          removeWinnerAfterDraw: spin.removeWinnerAfterDraw
+        }
+      };
+    }
+
+    function applyLotteryData(data) {
+      const importedPeople = validatePeople(data);
+      const importedConfig = validateConfig(data);
+
+      closeWinnerReveal();
+      // 名单增删只影响当前页面；重新导入时始终以所选 JSON 为准。
+      people = importedPeople;
+      config = importedConfig;
+      hasPeopleData = true;
+      appReady = true;
+      removeAfterDraw = config.spin.removeWinnerAfterDraw;
+      $("removeAfterDraw").checked = removeAfterDraw;
+      drawnIds = new Set();
+      history = [];
+      wheelPoolOverride = getCurrentPool();
+      currentRotation = randomWheelPhase();
+      wheelCanvas.style.transform = `rotate(${currentRotation}deg)`;
+      resetWheelIndicator();
+      $("winnerName").textContent = "等待幸运降临...";
+      $("winnerName").classList.add("winner-placeholder");
+      renderApplication();
+    }
+
+    // Canvas rendering
+    function resizeCanvas() {
+      drawWheel(getWheelPool());
+    }
+
+    function drawWheel(pool) {
+      const rect = wheelCanvas.getBoundingClientRect();
+      const size = rect.width;
+      if (!size) return;
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5));
+      if (wheelCanvas.width !== Math.round(size * dpr) || wheelCanvas.height !== Math.round(size * dpr)) {
+        wheelCanvas.width = Math.round(size * dpr);
+        wheelCanvas.height = Math.round(size * dpr);
+      }
+      wheelContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+      wheelContext.clearRect(0, 0, size, size);
+      const cx = size / 2, cy = size / 2;
+      const radius = size * .485;
+      if (!pool.length) {
+        wheelContext.beginPath(); wheelContext.arc(cx, cy, radius, 0, Math.PI * 2);
+        wheelContext.fillStyle = themeColor("--color-soft"); wheelContext.fill();
+        wheelContext.strokeStyle = themeColor("--color-surface"); wheelContext.lineWidth = 4; wheelContext.stroke();
+        wheelContext.fillStyle = themeColor("--color-muted"); wheelContext.textAlign = "center"; wheelContext.textBaseline = "middle";
+        wheelContext.font = `400 16px ${CANVAS_FONT_FAMILY}`;
+        wheelContext.fillText(appReady ? "本轮已抽完" : "请先导入配置", cx, cy);
+      } else {
+        const slice = Math.PI * 2 / pool.length;
+        const startBase = -Math.PI / 2 - slice / 2;
+        pool.forEach((person, index) => {
+          const start = startBase + index * slice;
+          const end = start + slice;
+          wheelContext.beginPath(); wheelContext.moveTo(cx, cy); wheelContext.arc(cx, cy, radius, start, end); wheelContext.closePath();
+          wheelContext.fillStyle = wheelColorTokens[index % wheelColorTokens.length]; wheelContext.fill();
+          wheelContext.strokeStyle = themeColor("--color-wheel-separator"); wheelContext.lineWidth = Math.max(1.2, size * .004); wheelContext.stroke();
+          const middle = start + slice / 2;
+          wheelContext.save(); wheelContext.translate(cx, cy); wheelContext.rotate(middle);
+          wheelContext.textAlign = "right"; wheelContext.textBaseline = "middle";
+          wheelContext.font = `400 ${WHEEL_LABEL_FONT_SIZE}px ${CANVAS_FONT_FAMILY}`;
+          wheelContext.fillStyle = themeColor("--color-text");
+          let label = person.name;
+          if (label.length > 5) label = label.slice(0, 5);
+          wheelContext.fillText(label, radius * .88, 0, radius * .38);
+          wheelContext.restore();
+        });
+        wheelContext.beginPath(); wheelContext.arc(cx, cy, radius, 0, Math.PI * 2);
+        wheelContext.strokeStyle = themeColor("--color-wheel-separator"); wheelContext.lineWidth = Math.max(3, size * .012); wheelContext.stroke();
+      }
+      wheelCanvas.style.transform = `rotate(${currentRotation}deg)`;
+    }
+
+    // Participant editing and UI rendering
+    function renderNames() {
+      const cloud = $("nameCloud");
+      $("namesCount").textContent = `${people.length} 位`;
+      cloud.innerHTML = "";
+      $("newPersonName").disabled = !hasPeopleData || isSpinning || isCharging || isCelebrating || isImporting;
+      $("addPersonBtn").disabled = !hasPeopleData || isSpinning || isCharging || isCelebrating || isImporting;
+      if (!people.length) {
+        cloud.innerHTML = '<div class="empty-note">名单为空，使用下方输入框添加人员</div>';
+        return;
+      }
+      people.forEach(person => {
+        const chip = document.createElement("span");
+        chip.className = "name-chip" + (drawnIds.has(String(person.id)) && removeAfterDraw ? " done" : "");
+        const dot = document.createElement("i"); dot.className = "tag-dot";
+        const name = document.createElement("span"); name.textContent = person.name;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "remove-person";
+        const removeMark = document.createElement("span");
+        removeMark.className = "remove-person-mark";
+        removeMark.textContent = "×";
+        remove.append(removeMark);
+        remove.setAttribute("aria-label", `删除${person.name}`);
+        remove.title = `删除${person.name}`;
+        remove.disabled = !hasPeopleData || isSpinning || isCharging || isCelebrating || isImporting;
+        remove.addEventListener("click", () => removePerson(person.id));
+        chip.append(dot, name, remove);
+        cloud.append(chip);
+      });
+    }
+
+    function addPerson(name) {
+      if (!hasPeopleData || isSpinning || isCharging || isCelebrating || isImporting) return false;
+      const cleanedName = String(name || "").trim();
+      if (!cleanedName) { showToast("请先输入姓名"); return false; }
+      if (people.some(person => person.name.toLocaleLowerCase() === cleanedName.toLocaleLowerCase())) {
+        showToast(`“${cleanedName}”已经在名单中`); return false;
+      }
+      const person = { id: makePersonId(), name: cleanedName };
+      people.push(person);
+      wheelPoolOverride = getCurrentPool().slice();
+      currentRotation = randomWheelPhase();
+      wheelCanvas.style.transform = `rotate(${currentRotation}deg)`;
+      resetWheelIndicator();
+      renderApplication();
+      showToast(`已添加 ${cleanedName}`);
+      return true;
+    }
+
+    function removePerson(id) {
+      if (!hasPeopleData || isSpinning || isCharging || isCelebrating || isImporting) return;
+      const person = people.find(item => String(item.id) === String(id));
+      if (!person) return;
+      people = people.filter(item => String(item.id) !== String(id));
+      drawnIds.delete(String(id));
+      wheelPoolOverride = getCurrentPool().slice();
+      currentRotation = randomWheelPhase();
+      wheelCanvas.style.transform = `rotate(${currentRotation}deg)`;
+      resetWheelIndicator();
+      renderApplication();
+      showToast(`已删除 ${person.name}`);
+    }
+
+    function renderHistory() {
+      const list = $("historyList");
+      list.innerHTML = "";
+      if (!history.length) {
+        list.innerHTML = '<div class="history-empty">还没有中奖记录</div>';
+        return;
+      }
+      const firstVisibleIndex = Math.max(0, history.length - 20);
+      for (let index = history.length - 1; index >= firstVisibleIndex; index -= 1) {
+        const item = history[index];
+        const displayNumber = index + 1;
+        const row = document.createElement("div");
+        row.className = "history-row";
+        const badge = document.createElement("div");
+        badge.className = "history-index";
+        badge.textContent = String(displayNumber).padStart(2, "0");
+        const main = document.createElement("div");
+        const name = document.createElement("div");
+        name.className = "history-name";
+        name.textContent = item.name;
+        const detail = document.createElement("span");
+        detail.className = "history-detail";
+        detail.textContent = `第 ${displayNumber} 次抽奖`;
+        main.append(name, detail);
+        const time = document.createElement("div");
+        time.className = "history-time";
+        time.textContent = item.time;
+        row.append(badge, main, time);
+        list.append(row);
+      }
+    }
+
+    function renderApplication() {
+      const pool = getCurrentPool();
+      $("poolCount").textContent = `${pool.length} 人`;
+      $("drawnCount").textContent = `已抽 ${drawnIds.size} 人`;
+      $("totalCount").textContent = `${people.length} 人`;
+      renderNames();
+      renderHistory();
+      syncControlStates(pool.length);
+      const wheelPool = getWheelPool();
+      drawWheel(wheelPool);
+      updateWheelCenter(wheelPool);
+    }
+
+    // Winner result and celebration
+    function showToast(message) {
+      const toast = $("toast"); toast.textContent = message; toast.classList.add("show");
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+    }
+
+    function celebrate() {
+      const colors = [themeColor("--color-primary"), themeColor("--color-charge-end"), themeColor("--color-wheel-3")];
+      for (let i = 0; i < CONFETTI_COUNT; i++) {
+        const bit = document.createElement("i"); bit.className = "confetti";
+        bit.style.left = `${Math.random() * 100}%`;
+        bit.style.background = colors[i % colors.length];
+        bit.style.setProperty("--drift", `${(Math.random() - .5) * 240}px`);
+        bit.style.animationDelay = `${Math.random() * CONFETTI_STAGGER_MS}ms`;
+        bit.style.transform = `rotate(${Math.random() * 180}deg)`;
+        document.body.append(bit);
+        setTimeout(() => bit.remove(), CONFETTI_DURATION_MS + CONFETTI_STAGGER_MS + 200);
+      }
+    }
+
+    function setWinner(person) {
+      $("winnerName").textContent = person.name;
+      $("winnerName").classList.remove("winner-placeholder");
+    }
+
+    function showWinnerReveal(person) {
+      winnerRevealReturnFocus = document.activeElement;
+      $("winnerRevealName").textContent = person.name;
+      $("winnerRevealMeta").textContent = `恭喜成为本轮第 ${history.length} 位中奖者`;
+      $("winnerReveal").hidden = false;
+      document.body.classList.add("has-winner-reveal");
+      $("winnerRevealName").focus({ preventScroll: true });
+    }
+
+    function closeWinnerReveal() {
+      const reveal = $("winnerReveal");
+      if (reveal.hidden) return;
+      reveal.hidden = true;
+      document.body.classList.remove("has-winner-reveal");
+      const returnFocus = winnerRevealReturnFocus;
+      winnerRevealReturnFocus = null;
+      if (returnFocus && returnFocus.isConnected && !returnFocus.disabled) returnFocus.focus();
+    }
+
+    // Charge and spin lifecycle
+    function setChargeProgress(power) {
+      const boundedPower = Math.min(1, Math.max(0, power));
+      const percent = Math.round(boundedPower * 100);
+      const spinButton = $("spinBtn");
+      spinButton.style.setProperty("--charge-progress", percent + "%");
+      spinButton.classList.toggle("charge-full", isCharging && boundedPower >= 1);
+    }
+
+    function updateChargeMeter(now) {
+      if (!isCharging) { chargeFrameId = null; return; }
+      const power = Math.min(1, (now - chargeStartedAt) / MAX_CHARGE_DURATION_MS);
+      setChargeProgress(power);
+      chargeFrameId = requestAnimationFrame(updateChargeMeter);
+    }
+
+    function beginCharge() {
+      if (!appReady || isSpinning || isCharging || isCelebrating || isImporting || !getCurrentPool().length) return;
+      isCharging = true;
+      chargeStartedAt = performance.now();
+      resetWheelIndicator();
+      setChargeProgress(0);
+      renderApplication();
+      chargeFrameId = requestAnimationFrame(updateChargeMeter);
+    }
+
+    function releaseCharge() {
+      if (!isCharging) return;
+      const power = Math.min(1, Math.max(0, (performance.now() - chargeStartedAt) / MAX_CHARGE_DURATION_MS));
+      if (chargeFrameId !== null) cancelAnimationFrame(chargeFrameId);
+      chargeFrameId = null;
+      isCharging = false;
+      keyboardChargeCode = null;
+      setChargeProgress(power);
+      startSpin(power);
+    }
+
+    function cancelCharge() {
+      if (!isCharging) return;
+      if (chargeFrameId !== null) cancelAnimationFrame(chargeFrameId);
+      chargeFrameId = null;
+      isCharging = false;
+      keyboardChargeCode = null;
+      setChargeProgress(0);
+      renderApplication();
+    }
+
+    function easedSpinProgress(progress) {
+      return progress >= 1
+        ? 1
+        : (1 - Math.exp(-SLOWDOWN_CURVE * progress)) / (1 - Math.exp(-SLOWDOWN_CURVE));
+    }
+
+    function animateSpin(now) {
+      const state = activeSpin;
+      if (!state || !isSpinning) { spinFrameId = null; return; }
+      const progress = Math.min(1, Math.max(0, (now - state.startTime) / (state.duration * 1000)));
+      currentRotation = state.startRotation + state.totalDistance * easedSpinProgress(progress);
+      wheelCanvas.style.transform = `rotate(${currentRotation}deg)`;
+      updateWheelCenter(state.pool);
+      if (progress >= 1) {
+        currentRotation = state.startRotation + state.totalDistance;
+        wheelCanvas.style.transform = `rotate(${currentRotation}deg)`;
+        updateWheelCenter(state.pool);
+        finishSpin();
+        return;
+      }
+      spinFrameId = requestAnimationFrame(animateSpin);
+    }
+
+    function startSpin(power = 0) {
+      if (!appReady || !config || isSpinning || isCharging || isCelebrating || isImporting) return;
+      const pool = getCurrentPool();
+      if (!pool.length) { showToast("本轮人员已全部抽完，请重置后再抽"); return; }
+
+      // 本轮固定扇区顺序；随机尾程让自动停止位置保持变化，不需要洗牌。
+      wheelPoolOverride = pool.slice();
+      const spin = config.spin;
+      const randomRemainder = randomIndex(360000) / 1000;
+      const boundedPower = Math.min(1, Math.max(0, Number(power) || 0));
+      const totalTurns = MINIMUM_SPIN_TURNS + boundedPower * ADDITIONAL_POWER_TURNS;
+      const totalDistance = totalTurns * 360 + randomRemainder;
+      const durationSteps = Math.floor((spin.maximumSpinDurationSeconds - spin.minimumSpinDurationSeconds) * 1000);
+      const duration = spin.minimumSpinDurationSeconds + randomIndex(durationSteps + 1) / 1000;
+      const startTime = performance.now();
+      const startRotation = currentRotation;
+      activeSpin = {
+        pool: wheelPoolOverride,
+        startRotation,
+        totalDistance,
+        duration,
+        startTime
+      };
+      isSpinning = true;
+      hasSpinStarted = true;
+      setChargeProgress(0);
+      $("wheelPointer").classList.add("visible");
+      $("winnerName").textContent = "幸运转动中…";
+      $("winnerName").classList.add("winner-placeholder");
+      renderApplication();
+      drawWheel(wheelPoolOverride);
+      spinFrameId = requestAnimationFrame(animateSpin);
+    }
+
+    function finishSpin() {
+      const state = activeSpin;
+      const pool = state ? state.pool : wheelPoolOverride;
+      spinFrameId = null;
+      activeSpin = null;
+      isSpinning = false;
+
+      if (!pool.length) {
+        renderApplication();
+        showToast("本轮没有候选人员，请导入名单或重置");
+        return;
+      }
+
+      const winnerIndex = pointerIndex(pool, currentRotation);
+      const winner = pool[winnerIndex];
+      drawnIds.add(String(winner.id));
+      const time = new Date().toLocaleTimeString("zh-CN", {hour:"2-digit", minute:"2-digit"});
+      history.push({ id: String(winner.id), name: winner.name, time });
+      setWinner(winner);
+      isCelebrating = true;
+      renderApplication();
+      window.setTimeout(() => {
+        isCelebrating = false;
+        syncControlStates();
+        celebrate();
+        showWinnerReveal(winner);
+      }, CELEBRATION_REVEAL_DELAY_MS);
+    }
+
+    function resetCurrentRound() {
+      if (!appReady || isSpinning || isCharging || isCelebrating || isImporting) return;
+      closeWinnerReveal();
+      drawnIds = new Set();
+      history = [];
+      wheelPoolOverride = people.slice();
+      currentRotation = randomWheelPhase();
+      wheelCanvas.style.transform = `rotate(${currentRotation}deg)`;
+      resetWheelIndicator();
+      $("winnerName").textContent = "等待幸运降临";
+      $("winnerName").classList.add("winner-placeholder");
+      renderApplication(); showToast("本轮已重置，所有人员均可重新参与");
+    }
+
+
+    async function readJsonFile(file) {
+      return JSON.parse(await file.text());
+    }
+
+    function wireEvents() {
+      const spinButton = $("spinBtn");
+      const settingsToggle = $("settingsToggleBtn");
+      settingsToggle.addEventListener("click", () => {
+        const settings = $("lotterySettings");
+        const willShow = settings.hidden;
+        settings.hidden = !willShow;
+        settingsToggle.setAttribute("aria-expanded", String(willShow));
+        settingsToggle.setAttribute("aria-label", willShow ? "隐藏抽奖设置" : "显示抽奖设置");
+      });
+      spinButton.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || isSpinning || isCelebrating || !appReady || isImporting) return;
+        event.preventDefault();
+        beginCharge();
+        if (isCharging && spinButton.setPointerCapture) {
+          try { spinButton.setPointerCapture(event.pointerId); } catch (_) {}
+        }
+      });
+      spinButton.addEventListener("pointerup", event => {
+        if (!isCharging) return;
+        event.preventDefault();
+        suppressSpinClickUntil = performance.now() + 500;
+        releaseCharge();
+      });
+      spinButton.addEventListener("pointercancel", cancelCharge);
+      spinButton.addEventListener("lostpointercapture", cancelCharge);
+      spinButton.addEventListener("keydown", event => {
+        if (event.code !== "Enter" || event.repeat || isSpinning || isCelebrating || isCharging || !appReady) return;
+        event.preventDefault();
+        beginCharge();
+        keyboardChargeCode = isCharging ? "Enter" : null;
+      });
+      spinButton.addEventListener("keyup", event => {
+        if (event.code !== "Enter" || keyboardChargeCode !== "Enter") return;
+        event.preventDefault();
+        keyboardChargeCode = null;
+        suppressSpinClickUntil = performance.now() + 500;
+        releaseCharge();
+      });
+      spinButton.addEventListener("click", () => {
+        if (performance.now() < suppressSpinClickUntil) {
+          suppressSpinClickUntil = 0;
+          return;
+        }
+        if (!appReady) {
+          if (!isImporting) $("lotteryFile").click();
+          return;
+        }
+        if (isSpinning || isCharging || isCelebrating) return;
+        const accessiblePower = 0;
+        setChargeProgress(accessiblePower);
+        startSpin(accessiblePower);
+      });
+      window.addEventListener("blur", cancelCharge);
+      document.addEventListener("keydown", event => {
+        if (event.code !== "Space") return;
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+        const interactive = target?.closest("button, a, [role='button'], summary");
+        if (interactive && interactive !== spinButton) {
+          if (interactive.matches("a")) event.preventDefault();
+          return;
+        }
+        if (!appReady && interactive === spinButton) return;
+
+        event.preventDefault();
+        if (event.repeat || !appReady || !getCurrentPool().length || isSpinning || isCharging
+          || isCelebrating || isImporting || !$("winnerReveal").hidden) return;
+        beginCharge();
+        keyboardChargeCode = isCharging ? "Space" : null;
+      });
+      document.addEventListener("keyup", event => {
+        if (event.code !== "Space" || keyboardChargeCode !== "Space") return;
+        event.preventDefault();
+        keyboardChargeCode = null;
+        suppressSpinClickUntil = performance.now() + 500;
+        releaseCharge();
+      });
+      $("closeWinnerRevealBtn").addEventListener("click", closeWinnerReveal);
+      $("winnerReveal").addEventListener("click", event => {
+        if (event.target === $("winnerReveal")) closeWinnerReveal();
+      });
+      document.addEventListener("keydown", event => {
+        if ($("winnerReveal").hidden) return;
+        if (event.key === "Escape") {
+          closeWinnerReveal();
+          return;
+        }
+        if (event.key === "Tab") {
+          event.preventDefault();
+          $("closeWinnerRevealBtn").focus();
+        }
+      });
+      $("removeAfterDraw").addEventListener("change", event => {
+        if (!appReady || isSpinning || isCharging || isCelebrating || isImporting) {
+          event.target.checked = removeAfterDraw;
+          return;
+        }
+        removeAfterDraw = event.target.checked;
+        renderApplication();
+        showToast(removeAfterDraw ? "已开启：中奖后自动移出本轮名单" : "已关闭：中奖者仍可再次参与");
+      });
+      $("resetRoundBtn").addEventListener("click", resetCurrentRound);
+      $("addPersonForm").addEventListener("submit", event => {
+        event.preventDefault();
+        if (!hasPeopleData || isSpinning || isCharging || isCelebrating || isImporting) return;
+        const input = $("newPersonName");
+        if (addPerson(input.value)) input.value = "";
+        input.focus();
+      });
+      $("importLotteryBtn").addEventListener("click", () => $("lotteryFile").click());
+      $("lotteryFile").addEventListener("change", async event => {
+        const file = event.target.files?.[0]; if (!file) return;
+        if (isSpinning || isCharging || isCelebrating || isImporting) { event.target.value = ""; return; }
+        isImporting = true;
+        syncControlStates();
+        try {
+          applyLotteryData(await readJsonFile(file));
+          showToast(`抽奖数据导入成功，共 ${people.length} 位人员`);
+        } catch (error) { showToast(`抽奖数据导入失败：${error.message}`); }
+        finally {
+          event.target.value = "";
+          isImporting = false;
+          syncControlStates();
+        }
+      });
+      window.addEventListener("resize", resizeCanvas);
+    }
+
+    wireEvents();
+    renderApplication();
+    requestAnimationFrame(resizeCanvas);
+  </script>
+</body>
+</html>
